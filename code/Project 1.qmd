@@ -1,0 +1,107 @@
+---
+title: "Project 1"
+format: pdf
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(readr)
+library(here)
+library(ggplot2)
+```
+
+## Data Pre-processing
+
+```{r}
+data <- read_csv(here::here("Iowa_Liquor_Sales_20250926.csv"))
+# data <- read_parquet(here::here("Iowa_Liquor_Sales_20250926.csv"))
+
+head(data)
+colnames(data)
+str(data)
+```
+
+-   total sales for each store per month
+
+-   store proximity / num stores in certain radius
+
+-   efficiency - sales/pop size
+
+-   total sales per month / num orders every month for each store -\> size of store?
+
+-   how often are the stores ordering
+
+-   what are they ordering most of -
+
+-   deal w missing values
+
+    -   check county, sales, zip codes
+
+```{r}
+data_clean <- data |>
+  mutate(County = tolower(County),
+         Date = mdy(Date),
+         Year = year(Date))
+
+head(data_clean)
+```
+
+## County Population Data
+
+```{r}
+pop <- read_csv("/Users/nicoleyee/Downloads/cc-est2024-agesex-19.csv")
+
+pop_split <- pop |>
+  mutate(CTYNAME = tolower(CTYNAME),
+         name = str_extract(CTYNAME, pattern = "^[^ ]+"),
+         year = case_when(
+           YEAR == 1 ~ 2020,
+           YEAR == 2 ~ 2020,
+           YEAR == 3 ~ 2021,
+           YEAR == 4 ~ 2022,
+           YEAR == 5 ~ 2023,
+           YEAR == 6 ~ 2024,
+         ),
+         over21 = POPESTIMATE-(AGE1417_TOT+AGE513_TOT+UNDER5_TOT),
+         propOver21 = over21/POPESTIMATE)
+
+write_csv(pop_split, file = here("pop.csv"))
+
+joined <- data_clean |>
+  left_join(pop_split, by=join_by(County==name, Year == year))
+head(pop_split)
+```
+
+```{r}
+pop_split |>
+  filter(year == 2024) |>
+  slice_max(order_by=over21, n=10) |>
+  arrange(over21) |>
+  ggplot(aes(x=reorder(name, -over21), y=over21)) +
+  geom_col() +
+  theme_minimal() +
+  labs(x="County", y="Population over 21")
+
+pop_split |>
+  filter(year == 2024) |>
+  slice_max(order_by=propOver21, n=10) |>
+  arrange(over21) |>
+  ggplot(aes(x=reorder(name, -propOver21), y=propOver21)) +
+  geom_col() +
+  theme_minimal() +
+  labs(x="County", title="Top 10 Counties with highest prop. of pop. over 21")
+```
+
+```{r}
+joined |>
+  filter(Year == 2024) |>
+  group_by(CTYNAME) |>
+  summarise(total_sales = sum(`Sale (Dollars)`)) |>
+  slice_max(order_by = total_sales, n=10) |>
+  ggplot(aes(x=reorder(CTYNAME, -total_sales), y=total_sales)) +
+  geom_col() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x="County",y="Total Sales (USD)", title="Total Sales in 2024")
+```
