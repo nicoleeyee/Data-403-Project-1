@@ -16,8 +16,9 @@ library(plotly)
 ## Data Pre-processing
 
 ```{r}
-data <- read_csv(here::here("Iowa_Liquor_Sales_20250926.csv"))
-# data <- read_parquet(here("data", "iowa_liquor_2023_2025.parquet"))
+# data <- read_csv(here::here("Iowa_Liquor_Sales_20250926.csv"))
+data <- read_parquet(here("data", "iowa_liquor_2023_2025.parquet"))
+pop <- read_csv(here("data", "pop.csv"))
 
 head(data)
 colnames(data)

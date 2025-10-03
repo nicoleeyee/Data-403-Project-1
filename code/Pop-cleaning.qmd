@@ -1,0 +1,26 @@
+---
+title: "Pop Data Cleaning"
+format: html
+editor: visual
+---
+
+```{r}
+pop <- read_csv("/Users/nicoleyee/Downloads/cc-est2024-agesex-19.csv")
+
+pop_split <- pop |>
+  mutate(CTYNAME = tolower(CTYNAME),
+         name = str_extract(CTYNAME, pattern = "^[^ ]+"),
+         year = case_when(
+           YEAR == 1 ~ 2020,
+           YEAR == 2 ~ 2020,
+           YEAR == 3 ~ 2021,
+           YEAR == 4 ~ 2022,
+           YEAR == 5 ~ 2023,
+           YEAR == 6 ~ 2024,
+         ),
+         over21 = POPESTIMATE-(AGE1417_TOT+AGE513_TOT+UNDER5_TOT),
+         propOver21 = over21/POPESTIMATE)
+
+write_csv(pop_split, file = here("pop.csv"))
+```
+
