@@ -8,3 +8,5 @@ Iowa_Liquor_Sales_20250926.csv.zip
 .Ruserdata
 **/.DS_Store
 .idea
+.gitattributes
+Data-403-Project-1.Rproj
