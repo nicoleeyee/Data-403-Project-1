@@ -9,13 +9,15 @@ library(tidyverse)
 library(readr)
 library(here)
 library(ggplot2)
+library(arrow) 
+library(plotly)
 ```
 
 ## Data Pre-processing
 
 ```{r}
 data <- read_csv(here::here("Iowa_Liquor_Sales_20250926.csv"))
-# data <- read_parquet(here::here("Iowa_Liquor_Sales_20250926.csv"))
+# data <- read_parquet(here("data", "iowa_liquor_2023_2025.parquet"))
 
 head(data)
 colnames(data)
@@ -104,4 +106,37 @@ joined |>
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(x="County",y="Total Sales (USD)", title="Total Sales in 2024")
+```
+
+```{r}
+pop_split |>
+  slice_max(order_by = POPESTIMATE)
+```
+
+```{r}
+proximity <- read_csv(here("data", "proximity.csv"))
+```
+
+```{r}
+store_sales <- data_clean |>
+  group_by(`Store Number`) |>
+  summarise(sum = sum(`Sale (Dollars)`)) |>
+  filter(!is.na(`Store Number`))
+
+prox_clean <- proximity |>
+  filter(store %in% store_sales$`Store Number`) |>
+  left_join(store_sales, by=join_by(store==`Store Number`)) 
+
+plot <- prox_clean |>
+  filter(sum < 15000000) |>
+  ggplot(aes(x=`# of stores within 5 mile radius`, y=sum, text = `store`)) +
+  geom_jitter() +
+  theme_minimal()
+ggplotly(plot)
+
+```
+
+```{r}
+data_clean |>
+  filter(`Store Number` == 6289)
 ```
