@@ -2,3 +2,7 @@ iowa_parquet
 Iowa_Liquor_Sales_20250926.csv
 Iowa_Liquor_Sales_20250926.csv.zip
 .DS_Store
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
