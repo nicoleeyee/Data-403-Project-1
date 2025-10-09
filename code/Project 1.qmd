@@ -43,9 +43,10 @@ str(data)
 
 ```{r}
 data_clean <- data |>
-  mutate(County = tolower(County),
-         Date = mdy(Date),
-         Year = year(Date))
+  mutate(year = year(date),
+         week = week(date),
+         month = month(date),
+         county = tolower(county))
 
 head(data_clean)
 ```
@@ -72,7 +73,7 @@ pop_split <- pop |>
 write_csv(pop_split, file = here("pop.csv"))
 
 joined <- data_clean |>
-  left_join(pop_split, by=join_by(County==name, Year == year))
+  left_join(pop, by=join_by(county==name, year == year))
 head(pop_split)
 ```
 
@@ -138,6 +139,117 @@ ggplotly(plot)
 ```
 
 ```{r}
-data_clean |>
-  filter(`Store Number` == 6289)
+mat <- matrix(c(1,2,3,4,5,6,7,8,9), nrow = 3)
+res <- matrix(c(1,4,2,56,4,3,1,2,6), nrow = 3)
+```
+
+## Linear Regression
+
+```{r}
+lin_reg <- function(X, Y) {
+  X.mat <- data.matrix(X)
+  Y.mat <- data.matrix(Y)
+  
+  ones <- rep(1, nrow(X))
+  
+  X.mat <- cbind(ones, X.mat)
+  
+  B <- solve(t(X.mat)%*%X.mat)%*%(t(X.mat)%*%Y.mat)
+  
+  return(B)
+}
+```
+
+```{r}
+predict <- function(X, B){
+  ones <- rep(1, nrow(X))
+  X <- data.matrix(X)
+  X.mat <- cbind(ones, X)
+  
+  Y.hat <- X.mat%*%B
+  
+  return(as.data.frame(Y.hat))
+}
+```
+
+## Cross Validation
+
+```{r}
+cv <- function(data, predictors, response, num_splits){
+
+  n <- nrow(data)
+  folds <- base::sample(rep(1:num_splits, length.out = n))
+  
+  results <- tibble()
+  
+  for(i in 1:num_splits){
+    test <- which(folds == i)
+    X_train <- data[-test, predictors, drop = FALSE]
+    Y_train <- data[-test, response, drop= FALSE]
+    
+    X_test <- data[test, predictors, drop=FALSE]
+    Y_test <- as.data.frame(data[test, response])
+    
+    B <- lin_reg(X_train, Y_train)
+    
+    Y_hat <- predict(X_test, B)
+    # return(Y_hat)
+    # print(Y_hat[1:5,])
+    # print(Y_test[1:5,])
+    split_metrics <- metrics(predictors, as.data.frame(Y_test), Y_hat) |>
+      mutate(split = i)
+    
+    results <- bind_rows(results, split_metrics)
+  }
+  
+  out <- results |>
+    summarise(across(c(R2, AR2, MAE, RMSE), mean))
+  return(out)
+}
+```
+
+## Metrics
+
+```{r}
+metrics <- function(predictors, Y, pred){
+  # return(Y-pred)
+  n <- nrow(Y)
+  p <- length(predictors) + 1
+  ssr <- sum((Y[,1]-pred[,1])^2)
+  sst <- sum((Y[,1]-mean(Y[,1]))^2)
+  
+  rsq <- 1- ssr/sst
+  adjrsq <- 1-(1-rsq)*(n-1)/(n-p)
+  
+  mae <- mean(abs(Y[,1]-pred[,1]))
+  
+  rmse <- sqrt(ssr/n)
+  
+  out <- tibble(R2 = rsq,
+                AR2 = adjrsq,
+                MAE = mae,
+                RMSE = rmse)
+  
+  return(out)
+}
+```
+
+## Testing
+
+```{r}
+s1 <- joined |>
+  group_by(county, week, month, year) |>
+  # summarise(avg_sales = mean(sale_dollars)) |>
+  mutate(avg_sales = mean(sale_dollars),
+    per_person = avg_sales/POPESTIMATE,
+         propsex = POPEST_MALE/POPEST_FEM,
+         propteen = AGE1417_TOT/POPESTIMATE,
+         propcollege = AGE1824_TOT/POPESTIMATE) |>
+  ungroup()
+predictors <- c("month", "over21", "propsex", "propteen", "propcollege")
+response <- "per_person"
+```
+
+```{r}
+cv(s1[1:200,], predictors, response, 5)
 ```
