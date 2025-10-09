@@ -19,6 +19,8 @@ library(plotly)
 # data <- read_csv(here::here("Iowa_Liquor_Sales_20250926.csv"))
 data <- read_parquet(here("data", "iowa_liquor_2023_2025.parquet"))
 pop <- read_csv(here("data", "pop.csv"))
+prox <- read_csv(here("data", "proximity.csv")) |>
+  mutate(county = tolower(county))
 
 head(data)
 colnames(data)
@@ -74,6 +76,9 @@ write_csv(pop_split, file = here("pop.csv"))
 
 joined <- data_clean |>
   left_join(pop, by=join_by(county==name, year == year))
+
+final <- joined |>
+  left_join(prox, by= join_by(county==county, store == store))
 head(pop_split)
 ```
 
@@ -147,17 +152,32 @@ res <- matrix(c(1,4,2,56,4,3,1,2,6), nrow = 3)
 
 ```{r}
 lin_reg <- function(X, Y) {
-  X.mat <- data.matrix(X)
-  Y.mat <- data.matrix(Y)
+  X.mat <- as.matrix(X) #|>
+    # drop_na(Y) |>
+    # as.matrix()
+  Y.mat <- as.matrix(Y) #|>
+    # drop_na() |>
+    # as.matrix()
   
   ones <- rep(1, nrow(X))
   
-  X.mat <- cbind(ones, X.mat)
+  X.mat <- as.matrix(cbind(ones, X.mat))
+  
   
   B <- solve(t(X.mat)%*%X.mat)%*%(t(X.mat)%*%Y.mat)
   
   return(B)
 }
+```
+
+```{r}
+preds <- s2 |>
+  select(!per_person) |>
+  drop_na()
+res <- s2 |>
+  select(per_person) |>
+  drop_na()
+lin_reg(preds, res)
 ```
 
 ```{r}
@@ -218,18 +238,22 @@ metrics <- function(predictors, Y, pred){
   ssr <- sum((Y[,1]-pred[,1])^2)
   sst <- sum((Y[,1]-mean(Y[,1]))^2)
   
+  # print(Y[,1])
+  # print(pred[,1])
+  
   rsq <- 1- ssr/sst
+
   adjrsq <- 1-(1-rsq)*(n-1)/(n-p)
-  
+
   mae <- mean(abs(Y[,1]-pred[,1]))
-  
+
   rmse <- sqrt(ssr/n)
-  
+
   out <- tibble(R2 = rsq,
                 AR2 = adjrsq,
                 MAE = mae,
                 RMSE = rmse)
-  
+
   return(out)
 }
 ```
@@ -246,10 +270,20 @@ s1 <- joined |>
          propteen = AGE1417_TOT/POPESTIMATE,
          propcollege = AGE1824_TOT/POPESTIMATE) |>
   ungroup()
-predictors <- c("month", "over21", "propsex", "propteen", "propcollege")
+predictors <- c("month", "propOver21", "propsex", "propteen")
 response <- "per_person"
 ```
 
 ```{r}
-cv(s1[1:200,], predictors, response, 5)
+s2 <- s1 |>
+  select(month, per_person, propOver21, propsex, propteen, propcollege) |>
+  drop_na()
+```
+
+```{r}
+cv(s2, predictors, response, 5)
+```
+
+```{r}
+
 ```
