@@ -208,7 +208,7 @@ cv <- function(data, predictors, response, num_splits){
     Y_train <- data[-test, response, drop= FALSE]
     
     X_test <- data[test, predictors, drop=FALSE]
-    Y_test <- as.data.frame(data[test, response])
+    Y_test <- data[test, response]
     
     B <- lin_reg(X_train, Y_train)
     
@@ -277,6 +277,8 @@ response <- "per_person"
 ```{r}
 s2 <- s1 |>
   select(month, per_person, propOver21, propsex, propteen, propcollege) |>
+  group_by(county, month, ) |>
+  summarize(avg = mean(sale_dollars))
   drop_na()
 ```
 
@@ -285,5 +287,183 @@ cv(s2, predictors, response, 5)
 ```
 
 ```{r}
+test <- joined |>
+  group_by(county, month) |>
+  summarise(per_person = mean(sale_dollars)/POPESTIMATE)
 
+test |>
+  ggplot(aes(x=month, y=per_person, color = county)) +
+  geom_point()
+```
+
+```{r}
+model_data <- read_csv(here("data", "dead_model_data.csv"))
+```
+
+```{r}
+predictors <- colnames(model_data)[!colnames(model_data) %in% c("revenue","county")]
+response <- 'revenue'
+final <- model_data |>
+  mutate(across(month_2:month_7, as.integer))
+cv(final, predictors, response, 5)
+```
+
+```{r}
+model_data |>
+  ggplot(aes(x=))
+```
+
+```{r}
+test <- final |>
+  pivot_longer(cols = c("vodka_ptc", "whiskey_ptc", "tequila_ptc", "rum_ptc"),
+               names_to = "type",
+               values_to = "type_ptc")
+
+plot_data <- test |>
+  group_by(type) |>
+  summarise(sales_ptc = mean(type_ptc),
+            revenue = mean(revenue))
+
+plot_data |>
+  ggplot(aes(x=reorder(type, -sales_ptc), y=sales_ptc, color=type, fill = type)) +
+  geom_col() +
+  scale_color_manual(values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"))+
+  scale_fill_manual(values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c")) +
+  theme_minimal() +
+  labs(x="type",
+       y="% bought")
+
+p2 <- test |>
+  group_by(type, county, year) |>
+  summarise(sales_ptc = mean(type_ptc),
+            revenue = mean(revenue))
+p2 |>
+  ggplot(aes(x=sales_ptc, y=revenue, colour = type)) +
+  geom_point()
+
+p3 <- final |>
+  pivot_longer(cols = c("hispanic", "foreign_born", "black", "api", "aian"),
+               names_to = "ethnicity",
+               values_to = "ethnicity_count")
+
+p3 |>
+  group_by(ethnicity, county) |>
+  summarise(avg_sale = mean(revenue),
+            count = mean(ethnicity_count)) |>
+  filter(avg_sale < 7500000) |>
+  ggplot(aes(x=count, y=avg_sale, color = ethnicity)) +
+  geom_point() +
+  labs(x="Population Count",
+       y="Sales ($)") +
+  scale_color_brewer(type="qual") +
+  # scale_color_manual(values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c","darkgreen"))+
+  theme_bw()
+```
+
+```{r}
+# counties with highest sales
+# bin alc type or ethnicity
+p4 <- final |>
+  pivot_longer(cols = c("vodka_ptc", "whiskey_ptc", "tequila_ptc", "rum_ptc"),
+               names_to = "type",
+               values_to = "type_ptc") |>
+  group_by(county_1, type) |>
+  summarise(pct = mean(type_ptc),
+            rev = mean(revenue)) |>
+  mutate(type = case_when(
+    type == "vodka_ptc" ~ "Vodka",
+    type == "whiskey_ptc" ~ "Whiskey",
+    type == "tequila_ptc" ~ "Tequila",
+    type == "rum_ptc" ~ "Rum",
+  )) |>
+  arrange(-rev)
+  # slice_max(order_by = rev, n=10)
+  
+p4[1:40,] |>
+  ggplot(aes(fill=type, y=pct, x=reorder(county_1, -rev))) +
+  geom_bar(position="stack", stat="identity") +
+  scale_fill_manual(values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"),
+                    name="Type") +
+  labs(x="County",
+       y="",
+       title = "Proportion of alcohol types sold in counties with the highest sales") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30))
+
+```
+
+```{r}
+p5 <- model_data |>
+  mutate(ratio = revenue/population) |>
+  pivot_longer(cols = c("pct_hispanic", "pct_foreign_born", "pct_black", "pct_api", "pct_aian"),
+               names_to = "ethnicity",
+               values_to = "ethnicity_count",
+               names_prefix = "pct_") |>
+  group_by(county_1, ethnicity) |>
+  summarise(pct = mean(ethnicity_count)/100,
+            rev = mean(ratio)) |>
+  mutate(ethnicity = case_when(
+    ethnicity == "hispanic" ~ "Hispanic",
+    ethnicity == "foreign_born" ~ "Foreign born",
+    ethnicity == "black" ~ "Black",
+    ethnicity == "aian" ~ "American Indian/Alaska Native",
+    ethnicity == "api" ~ "Asian, Native Hawaiian, or Pacific Islander"
+  )) |>
+  arrange(-rev)
+
+p5[1:50,] |>
+  ggplot(aes(fill=ethnicity, y=pct, x=reorder(county_1, -rev))) +
+  geom_bar(position="stack", stat="identity") +
+  scale_fill_manual(values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "darkgreen"),
+                    name="Race/Ethnicity") +
+  labs(x="County",
+       y="",
+       title = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30))
+
+```
+
+```{r}
+p6 <- model_data |>
+    pivot_longer(cols = c("vodka_ptc", "whiskey_ptc", "tequila_ptc", "rum_ptc"),
+               names_to = "type",
+               values_to = "type_ptc") |>
+  group_by(type, county) |>
+  summarise(rev = mean(revenue),
+            pct = mean(type_ptc)) 
+
+p6 |>
+  # filter(type %in% c("tequila_ptc", "whiskey_ptc")) |>
+  ggplot(aes(x=pct, y=rev, color=type)) +
+  geom_point() +
+  theme_minimal()
+```
+
+```{r}
+model_data |>
+  ggplot(aes(x=median_age, y=revenue)) +
+  geom_jitter() +
+  labs(x="Median Age",
+       y="Alcohol Sales") +
+  scale_y_continuous(labels = scales::dollar) +
+  theme_bw()
+```
+
+```{r}
+p7 <- model_data |>
+  mutate(county = tolower(county)) |>
+  left_join(pop_split, by=join_by(county==name, year==year))
+
+p7 |>
+  pivot_longer(cols = c("AGE1417_TOT", "AGE1824_TOT", "AGE2544_TOT", "AGE4564_TOT",
+                        "AGE65PLUS_TOT"),
+               names_to = "age_group",
+               values_to = "age_counts") |>
+  mutate(ageprops = age_counts/population) |>
+  group_by(age_group, county) |>
+  slice_max(age_counts) |>
+  summarize(rev = mean(revenue)) |>
+  ggplot(aes(x=age_group,y=rev)) +
+  geom_boxplot()
 ```
