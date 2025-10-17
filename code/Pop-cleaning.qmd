@@ -5,11 +5,28 @@ editor: visual
 ---
 
 ```{r}
-pop <- read_csv("/Users/nicoleyee/Downloads/cc-est2024-agesex-19.csv")
+#| label: load packages
+library(tidyverse)
+library(here)
+```
 
+```{r}
+#| label: read in data
+
+# read in data
+pop <- read_csv(here("data", "cc-est2024-agesex-19.csv"))
+```
+
+```{r}
+#| label: clean data
+#| 
 pop_split <- pop |>
+  # make county name lowercase
   mutate(CTYNAME = tolower(CTYNAME),
+         # take name only, first word
          name = str_extract(CTYNAME, pattern = "^[^ ]+"),
+         # create new year column
+         # use data documentation to convert numbers to actual years
          year = case_when(
            YEAR == 1 ~ 2020,
            YEAR == 2 ~ 2020,
@@ -18,9 +35,12 @@ pop_split <- pop |>
            YEAR == 5 ~ 2023,
            YEAR == 6 ~ 2024,
          ),
+         # create count of population that is of drinking age
+         # total pop - (pop 14-17 + pop 5-13 + pop under 5)
          over21 = POPESTIMATE-(AGE1417_TOT+AGE513_TOT+UNDER5_TOT),
+         # create column for proportion of county population of drinking age
          propOver21 = over21/POPESTIMATE)
 
+# write cleaned data to a csv
 write_csv(pop_split, file = here("pop.csv"))
 ```
-
