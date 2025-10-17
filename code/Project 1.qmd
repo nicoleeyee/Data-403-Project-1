@@ -11,6 +11,7 @@ library(here)
 library(ggplot2)
 library(arrow) 
 library(plotly)
+library(kableExtra)
 ```
 
 ## Data Pre-processing
@@ -364,7 +365,7 @@ p3 |>
 # counties with highest sales
 # bin alc type or ethnicity
 p4 <- final |>
-  pivot_longer(cols = c("vodka_ptc", "whiskey_ptc", "tequila_ptc", "rum_ptc"),
+  pivot_longer(cols = c("vodka_ptc", "whiskey_ptc", "tequila_ptc", "rum_ptc", "other_ptc"),
                names_to = "type",
                values_to = "type_ptc") |>
   group_by(county_1, type) |>
@@ -375,6 +376,8 @@ p4 <- final |>
     type == "whiskey_ptc" ~ "Whiskey",
     type == "tequila_ptc" ~ "Tequila",
     type == "rum_ptc" ~ "Rum",
+    type == "other_ptc" ~ "Other"
+    
   )) |>
   arrange(-rev)
   # slice_max(order_by = rev, n=10)
@@ -382,11 +385,24 @@ p4 <- final |>
 p4[1:40,] |>
   ggplot(aes(fill=type, y=pct, x=reorder(county_1, -rev))) +
   geom_bar(position="stack", stat="identity") +
-  scale_fill_manual(values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"),
+  scale_fill_manual(values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "darkgreen"),
                     name="Type") +
   labs(x="County",
        y="",
        title = "Proportion of alcohol types sold in counties with the highest sales") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30))
+
+p4 |>
+  group_by(type) |>
+  summarise(pct = mean(pct)) |>
+  ggplot(aes(x=reorder(type, -pct), y=pct, fill=type)) +
+  geom_bar(position = "dodge", stat='identity') +
+  scale_fill_manual(values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "darkgreen"),
+                    name="Type") +
+  labs(x="Category",
+       y="",
+       title = "Proportion of alcohol categories sold") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 30))
 
@@ -395,27 +411,28 @@ p4[1:40,] |>
 ```{r}
 p5 <- model_data |>
   mutate(ratio = revenue/population) |>
-  pivot_longer(cols = c("pct_hispanic", "pct_foreign_born", "pct_black", "pct_api", "pct_aian"),
+  pivot_longer(cols = c("pct_hispanic", "pct_black", "pct_api", "pct_aian", "pct_white"),
                names_to = "ethnicity",
                values_to = "ethnicity_count",
                names_prefix = "pct_") |>
   group_by(county_1, ethnicity) |>
-  summarise(pct = mean(ethnicity_count)/100,
+  summarise(pct = mean(ethnicity_count),
             rev = mean(ratio)) |>
   mutate(ethnicity = case_when(
     ethnicity == "hispanic" ~ "Hispanic",
     ethnicity == "foreign_born" ~ "Foreign born",
     ethnicity == "black" ~ "Black",
     ethnicity == "aian" ~ "American Indian/Alaska Native",
-    ethnicity == "api" ~ "Asian, Native Hawaiian, or Pacific Islander"
+    ethnicity == "api" ~ "Asian, Native Hawaiian, or Pacific Islander",
+    ethnicity == "white" ~ "White"
   )) |>
   arrange(-rev)
 
 p5[1:50,] |>
   ggplot(aes(fill=ethnicity, y=pct, x=reorder(county_1, -rev))) +
-  geom_bar(position="stack", stat="identity") +
+  geom_bar(position="dodge", stat="identity") +
   scale_fill_manual(values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "darkgreen"),
-                    name="Race/Ethnicity") +
+                    name="Ethnicity") +
   labs(x="County",
        y="",
        title = "") +
@@ -442,12 +459,16 @@ p6 |>
 
 ```{r}
 model_data |>
-  ggplot(aes(x=median_age, y=revenue)) +
+  group_by(county) |>
+  summarise(avg = mean(median_age),
+            avg_rev = mean(revenue)) |>
+  ggplot(aes(x=avg, y=log(avg_rev))) +
   geom_jitter() +
-  labs(x="Median Age",
-       y="Alcohol Sales") +
+  labs(x="Age (years)",
+       y="Alcohol Sales ($, log scale)",
+       title = "County Median Age by Average Alcohol Sales (2023–2024)") +
   scale_y_continuous(labels = scales::dollar) +
-  theme_bw()
+  theme_bw() 
 ```
 
 ```{r}
@@ -466,4 +487,102 @@ p7 |>
   summarize(rev = mean(revenue)) |>
   ggplot(aes(x=age_group,y=rev)) +
   geom_boxplot()
+```
+
+```{r}
+model_data |>
+  group_by(county_1, year) |>
+  summarise(avg_rev = mean(revenue),
+            avg_edu = mean(pct_high_school_lower)) |>
+  ggplot(aes(x=avg_edu, y=log(avg_rev))) +
+  geom_point() +
+  labs(x="% of Population",
+       y="Alcohol Sales ($, log scale)",
+       title = "Relationship Between % of County Population with Education Level \nBelow High School and Alcohol Sales") +
+  # scale_y_continuous(labels = scales::dollar) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+```{r}
+table <- model_data |>
+  mutate(ratio = revenue/population) |>
+  pivot_longer(cols = c("pct_hispanic", "pct_black", "pct_api", "pct_aian", "pct_white"),
+               names_to = "ethnicity",
+               values_to = "ethnicity_count",
+               names_prefix = "pct_") |>
+  group_by(ethnicity) |>
+  summarise(pct = mean(ethnicity_count),
+            rev = mean(ratio)) |>
+  mutate(ethnicity = case_when(
+    ethnicity == "hispanic" ~ "Hispanic",
+    ethnicity == "foreign_born" ~ "Foreign born",
+    ethnicity == "black" ~ "Black",
+    ethnicity == "aian" ~ "American Indian/Alaska Native",
+    ethnicity == "api" ~ "Asian, Native Hawaiian, or Pacific Islander",
+    ethnicity == "white" ~ "White"
+  )) |>
+  arrange(-rev)
+
+```
+
+```{r}
+p9 <- model_data |>
+  # mutate(ratio = revenue/population) |>
+  pivot_longer(cols = c("pct_hispanic", "pct_black", "pct_api", "pct_aian"),
+               names_to = "ethnicity",
+               values_to = "proportion",
+               names_prefix = "pct_") |>
+  group_by(county_1, ethnicity) |>
+  summarise(pct = mean(proportion),
+            rev = mean(revenue)) |>
+  mutate(ethnicity = case_when(
+    ethnicity == "hispanic" ~ "Hispanic",
+    ethnicity == "foreign_born" ~ "Foreign born",
+    ethnicity == "black" ~ "Black",
+    ethnicity == "aian" ~ "American Indian/Alaska Native",
+    ethnicity == "api" ~ "Asian, Native Hawaiian, or Pacific Islander"
+    # ethnicity == "white" ~ "White"
+  )) 
+  # arrange(-rev)
+p9 |>
+  ggplot(aes(x=pct, y=log(rev), color = ethnicity)) +
+  geom_jitter() +
+  scale_color_manual(name="Ethnicity", values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c")) +
+  facet_wrap(~ethnicity) +
+  theme_minimal() +
+  labs(x="% of Population",
+       y = "Alcohol Sales ($, log scale)",
+       title="Relationship between County Demographics and Alcohol Sales for \nMinority Ethnicities")
+```
+
+```{r}
+p9 <- model_data |>
+  # mutate(ratio = revenue/population) |>
+  pivot_longer(cols = c("pct_hispanic", "pct_black", "pct_api", "pct_aian", "pct_white"),
+               names_to = "ethnicity",
+               values_to = "proportion",
+               names_prefix = "pct_") |>
+  group_by(county_1, ethnicity) |>
+  summarise(pct = mean(proportion),
+            rev = mean(revenue)) |>
+  mutate(ethnicity = case_when(
+    ethnicity == "hispanic" ~ "Hispanic",
+    ethnicity == "foreign_born" ~ "Foreign born",
+    ethnicity == "black" ~ "Black",
+    ethnicity == "aian" ~ "American Indian/Alaska Native",
+    ethnicity == "api" ~ "Asian, Native Hawaiian, or Pacific Islander",
+    ethnicity == "white" ~ "White"
+  )) 
+  # arrange(-rev)
+p9 |>
+  ggplot(aes(x=pct, y=log(rev), color = ethnicity)) +
+  geom_jitter() +
+  scale_color_manual(name="Ethnicity", values = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "darkgreen")) +
+  facet_wrap(~ethnicity) +
+  theme_minimal() +
+  labs(x="% of Population",
+       y = "Alcohol Sales ($)",
+       title="Relationship between County Demographics and Alcohol Sales for \nMinority Ethnicities")
 ```
